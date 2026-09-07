@@ -1,0 +1,18 @@
+{
+  "name": "multivision-management-system",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Private shop management system for Multivision Electronics & Investments",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "seed": "node scripts/seed.js",
+    "reseed": "node scripts/seed.js --force"
+  },
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "multer": "^1.4.5-lts.1"
+  }
+}

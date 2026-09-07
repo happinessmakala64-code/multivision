@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Login — Multivision Management System</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body class="login-page" data-page="login">
+  <form class="login-box" id="loginForm">
+    <h1>MULTIVISION ELECTRONICS &amp; INVESTMENTS</h1>
+    <p>Private Shop Management System — authorised staff only.</p>
+    <label>Username</label>
+    <input name="username" autocomplete="username" required>
+    <label>Password</label>
+    <input name="password" type="password" autocomplete="current-password" required>
+    <div style="margin-top:16px"><button class="btn" style="width:100%">Log In</button></div>
+    <div id="err"></div>
+  </form>
+<script src="js/app.js"></script>
+<script>
+if (token()) location.href = 'dashboard.html';
+document.getElementById('loginForm').onsubmit = async function (e) {
+  e.preventDefault();
+  const body = Object.fromEntries(new FormData(e.target));
+  try {
+    const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Login failed');
+    localStorage.setItem('mv_token', data.token);
+    localStorage.setItem('mv_user', JSON.stringify(data.user));
+    location.href = 'dashboard.html';
+  } catch (err) {
+    document.getElementById('err').innerHTML = '<div class="error">' + err.message + '</div>';
+  }
+};
+</script>
+</body>
+</html>
