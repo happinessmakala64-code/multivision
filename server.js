@@ -82,6 +82,11 @@ function publicProduct(p) {
   };
 }
 function totalStock(p) { return Object.values(p.stock || {}).reduce((a, b) => a + Number(b || 0), 0); }
+function productProfit(p) { return Number(p.price || 0) - Number(p.purchasePrice || 0); }
+function productStockSummary(p) {
+  const stock = totalStock(p);
+  return { stock, stockCost: stock * Number(p.purchasePrice || 0), expectedProfit: stock * productProfit(p) };
+}
 function branchNamesFor(p) {
   const branches = read('branches');
   return branches.filter((b) => Number((p.stock || {})[b.id] || 0) > 0).map((b) => b.name);
@@ -407,6 +412,13 @@ app.get('/api/admin/dashboard', auth, (req, res) => {
   const monthExp = expenses.filter((e) => inRange(e.date, startMonth, end));
   const low = products.filter((p) => { const t = totalStock(p); return t > 0 && t <= Number(p.lowStockLevel || 2); });
   const out = products.filter((p) => totalStock(p) === 0);
+  const stockSummary = products.reduce((a, p) => {
+    const summary = productStockSummary(p);
+    a.units += summary.stock;
+    a.cost += summary.stockCost;
+    a.expectedProfit += summary.expectedProfit;
+    return a;
+  }, { units: 0, cost: 0, expectedProfit: 0 });
   res.json({
     todaySales: sum(todaySales, 'total'), todayCount: todaySales.length,
     totalSales: sum(sales, 'total'),
@@ -414,6 +426,7 @@ app.get('/api/admin/dashboard', auth, (req, res) => {
     expenses: sum(expenses, 'amount'), monthlyExpenses: sum(monthExp, 'amount'),
     profit: sum(sales, 'profit') - sum(expenses, 'amount'),
     products: products.length,
+    stockUnits: stockSummary.units, stockCost: stockSummary.cost, expectedProfit: stockSummary.expectedProfit,
     lowStock: low.map((p) => ({ id: p.id, name: p.name, stock: totalStock(p) })),
     outOfStock: out.map((p) => ({ id: p.id, name: p.name })),
     customers: read('customers').length,
@@ -454,7 +467,7 @@ app.get('/api/admin/reports', auth, (req, res) => {
     byCustomer: group(sales, (s) => s.customerName || 'Walk-in Customer', (s) => s.total),
     expensesByCategory: group(expenses, (e) => e.category, (e) => Number(e.amount || 0)),
     totals: { totalSales, totalExpenses, grossProfit, netProfit: grossProfit - totalExpenses, transactions: sales.length },
-    inventory: products.map((p) => ({ name: p.name, sku: p.sku, category: p.category, stock: totalStock(p), price: p.price, purchasePrice: p.purchasePrice, value: totalStock(p) * Number(p.purchasePrice || 0), status: totalStock(p) === 0 ? 'Out of stock' : (totalStock(p) <= Number(p.lowStockLevel || 2) ? 'Low stock' : 'OK') })),
+    inventory: products.map((p) => { const summary = productStockSummary(p); return { name: p.name, sku: p.sku, category: p.category, stock: summary.stock, price: p.price, purchasePrice: p.purchasePrice, profit: productProfit(p), value: summary.stockCost, expectedProfit: summary.expectedProfit, status: summary.stock === 0 ? 'Out of stock' : (summary.stock <= Number(p.lowStockLevel || 2) ? 'Low stock' : 'OK') }; }),
     laybys: read('laybys').map(recalcLayby).map((l) => ({ customerName: l.customerName, productName: l.productName, agreedPrice: l.agreedPrice, totalPaid: l.totalPaid, balance: l.balance, status: l.status, dateStarted: l.dateStarted })),
   });
 });

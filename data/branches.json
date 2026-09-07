@@ -1,0 +1,23 @@
+[
+  {
+    "id": "br1",
+    "name": "Mzuzu — St Augustine Market",
+    "town": "Mzuzu",
+    "address": "Opposite Mzuni in St Augustine Market.",
+    "phone": "0992282807"
+  },
+  {
+    "id": "br2",
+    "name": "Mzuzu — Near Mzuzu University",
+    "town": "Mzuzu",
+    "address": "Just after Mzuzu University Main Gate, 30 metres ahead towards Kaka Motel, on the right-hand side after Cape Restaurant. Look for the MULTIVISION ELECTRONICS & INVESTMENTS sign post.",
+    "phone": "0992282807"
+  },
+  {
+    "id": "br3",
+    "name": "Zomba — An Juman Shopping Mall",
+    "town": "Zomba",
+    "address": "At An Juman Shopping Mall.",
+    "phone": "0992282807"
+  }
+]

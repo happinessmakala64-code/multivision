@@ -1,0 +1,20 @@
+[
+  {
+    "id": "u1",
+    "username": "admin",
+    "name": "Administrator",
+    "role": "admin",
+    "branchId": "br1",
+    "passwordHash": "3e39c0db344f0b3ff2956440e5a0ccdb:86b981af793b84f57fad090cca75fa5ccc737ed5d4377bbf4faca8804b125363",
+    "active": true
+  },
+  {
+    "id": "u2",
+    "username": "cashier",
+    "name": "Shop Cashier",
+    "role": "staff",
+    "branchId": "br1",
+    "passwordHash": "c67f02b9a9331df0ab66205d3ec80822:230f27bef012cd71450568651db4cb76e15d88e32843b0bbc32ff2f3483abc0b",
+    "active": true
+  }
+]

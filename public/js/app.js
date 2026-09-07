@@ -98,10 +98,12 @@ PAGES.dashboard = async function () {
   content(`<div class="cards">
     ${[['Today\'s Sales', money(d.todaySales), 'blue'], ['Total Sales', money(d.totalSales), ''], ['Monthly Sales', money(d.monthlySales), ''],
       ['Expenses', money(d.expenses), 'red'], ['Profit', money(d.profit), 'green'], ['Products', d.products, ''],
+      ['Stock Units', d.stockUnits, 'blue'], ['Stock Cost', money(d.stockCost), ''], ['Expected Stock Profit', money(d.expectedProfit), 'green'],
       ['Low Stock', d.lowStock.length, 'red'], ['Out of Stock', d.outOfStock.length, 'red'], ['Customers', d.customers, ''],
       ['Suppliers', d.suppliers, ''], ['Pending Lay-Bys', d.pendingLaybys, 'blue'], ['Lay-By Balance', money(d.pendingLaybyValue), '']]
       .map((c) => `<div class="card ${c[2]}"><div class="label">${c[0]}</div><div class="value">${c[1]}</div></div>`).join('')}
   </div>
+  ${(d.lowStock.length || d.outOfStock.length) ? `<div class="stock-alert" role="alert"><strong>Stock alert</strong><span>${d.lowStock.length ? `${d.lowStock.length} low-stock product${d.lowStock.length === 1 ? '' : 's'}` : ''}${d.lowStock.length && d.outOfStock.length ? ' and ' : ''}${d.outOfStock.length ? `${d.outOfStock.length} out-of-stock product${d.outOfStock.length === 1 ? '' : 's'}` : ''} need attention.</span><a href="inventory.html">Review inventory</a></div>` : ''}
   <div class="panel"><h3>Recent Transactions</h3><table><thead><tr><th>Receipt</th><th>Customer</th><th>Staff</th><th>Total</th><th>Date</th></tr></thead>
   <tbody>${d.recent.map((s) => `<tr><td>${s.receiptNo}</td><td>${esc(s.customerName)}</td><td>${esc(s.staffName)}</td><td>${money(s.total)}</td><td>${dt(s.date)}</td></tr>`).join('') || '<tr><td colspan="5" class="muted">No sales recorded yet.</td></tr>'}</tbody></table></div>
   <div class="grid2">
@@ -122,12 +124,14 @@ PAGES.products = async function () {
     const q = document.getElementById('search').value.toLowerCase();
     const cat = document.getElementById('fcat').value;
     const rows = products.filter((p) => (!cat || p.category === cat) && (p.name + p.category).toLowerCase().includes(q));
-    document.getElementById('list').innerHTML = `<table><thead><tr><th>Image</th><th>Name</th><th>Category</th><th>Price</th><th>Stock</th><th>Status</th><th>Public</th><th></th></tr></thead><tbody>
+    document.getElementById('list').innerHTML = `<table><thead><tr><th>Image</th><th>Name</th><th>Category</th><th>Ordering Price</th><th>Selling Price</th><th>Profit / Unit</th><th>Expected Profit</th><th>Stock</th><th>Status</th><th>Public</th><th></th></tr></thead><tbody>
       ${rows.map((p) => `<tr>
         <td>${p.image ? `<img class="thumb" src="${p.image}">` : '<div class="thumb"></div>'}</td>
         <td>${esc(p.name)}<br><span class="muted">${esc(p.sku)}</span></td>
         <td>${esc(p.category)}</td>
-        <td>${money(p.price)}${p.priceMax ? ' - ' + money(p.priceMax) : ''}</td>
+        <td>${money(p.purchasePrice)}</td><td>${money(p.price)}${p.priceMax ? ' - ' + money(p.priceMax) : ''}</td>
+        <td>${money(Number(p.price || 0) - Number(p.purchasePrice || 0))}</td>
+        <td>${money(stockTotal(p) * (Number(p.price || 0) - Number(p.purchasePrice || 0)))}</td>
         <td>${stockTotal(p)}</td><td>${stockBadge(p)}</td>
         <td>${p.visible ? '<span class="badge ok">Visible</span>' : '<span class="badge out">Hidden</span>'}</td>
         <td style="white-space:nowrap"><button class="btn sm" onclick="productForm('${p.id}')">Edit</button>
@@ -151,7 +155,7 @@ window.productForm = function (pid) {
         <div><label>Category</label><select name="category">${CATEGORIES.map((c) => `<option ${c === p.category ? 'selected' : ''}>${c}</option>`).join('')}</select></div>
         <div><label>Selling Price (MWK)</label><input name="price" type="number" required value="${p.price || ''}"></div>
         <div><label>Max Price (range, optional)</label><input name="priceMax" type="number" value="${p.priceMax || 0}"></div>
-        <div><label>Purchase Price</label><input name="purchasePrice" type="number" value="${p.purchasePrice || 0}"></div>
+        <div><label>Ordering Price</label><input name="purchasePrice" type="number" value="${p.purchasePrice || 0}"></div>
         <div><label>SKU</label><input name="sku" value="${esc(p.sku || '')}"></div>
         <div><label>Low Stock Level</label><input name="lowStockLevel" type="number" value="${p.lowStockLevel || 2}"></div>
         <div><label>Availability</label><select name="available"><option value="true" ${p.available !== false ? 'selected' : ''}>Available</option><option value="false" ${p.available === false ? 'selected' : ''}>Not available</option></select></div>
@@ -187,19 +191,26 @@ window.deleteProduct = async function (pid) { if (confirm('Delete this product?'
 PAGES.inventory = async function () {
   const [products, moves] = await Promise.all([api('/api/admin/products'), api('/api/admin/stockmoves')]);
   window.__products = products;
-  content(`<div class="row"><input id="isearch" placeholder="Search inventory...">
+  const lowStock = products.filter((p) => { const stock = stockTotal(p); return stock > 0 && stock <= Number(p.lowStockLevel || 2); });
+  const outOfStock = products.filter((p) => stockTotal(p) === 0);
+  content(`${(lowStock.length || outOfStock.length) ? `<div class="stock-alert" role="alert"><strong>Stock alert</strong><span>${lowStock.length} low-stock · ${outOfStock.length} out-of-stock</span><a href="#stock-alert-list">See affected products</a></div>` : '<div class="stock-ok" role="status">All products have stock above their alert levels.</div>'}
+    <div class="row"><input id="isearch" placeholder="Search inventory...">
       <button class="btn" onclick="stockForm()">Stock Movement</button></div>
     <div class="panel" id="ilist"></div>
+    <div class="panel" id="stock-alert-list"><h3>Products needing attention</h3>${lowStock.concat(outOfStock).map((p) => `<div class="alert-row"><span>${esc(p.name)}</span><b>${stockTotal(p)} in stock</b><span>${stockTotal(p) === 0 ? 'Out of stock' : `Alert at ${Number(p.lowStockLevel || 2)} units`}</span></div>`).join('') || '<span class="muted">No stock alerts.</span>'}</div>
     <div class="panel"><h3>Recent Stock Movements</h3><table><thead><tr><th>Date</th><th>Product</th><th>Type</th><th>Qty</th><th>Branch</th><th>By</th></tr></thead><tbody>
     ${moves.map((m) => `<tr><td>${dt(m.date)}</td><td>${esc(m.productName)}</td><td>${m.type}${m.toBranchId ? ' → ' + esc(branchName(m.toBranchId)) : ''}</td><td>${m.quantity}</td><td>${esc(branchName(m.branchId))}</td><td>${esc(m.user)}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No movements yet.</td></tr>'}
     </tbody></table></div>`);
   const draw = () => {
     const q = document.getElementById('isearch').value.toLowerCase();
     const rows = products.filter((p) => (p.name + p.category + p.sku).toLowerCase().includes(q));
-    document.getElementById('ilist').innerHTML = `<table><thead><tr><th>Product</th><th>SKU</th><th>Category</th>${BRANCHES.map((b) => `<th>${esc(b.town)}</th>`).join('')}<th>Total</th><th>Buy</th><th>Sell</th><th>Status</th></tr></thead><tbody>
+    const totalUnits = rows.reduce((a, p) => a + stockTotal(p), 0);
+    const totalCost = rows.reduce((a, p) => a + stockTotal(p) * Number(p.purchasePrice || 0), 0);
+    const totalExpectedProfit = rows.reduce((a, p) => a + stockTotal(p) * (Number(p.price || 0) - Number(p.purchasePrice || 0)), 0);
+    document.getElementById('ilist').innerHTML = `<p class="muted">${totalUnits} units in stock · Cost: <b>${money(totalCost)}</b> · Expected profit: <b>${money(totalExpectedProfit)}</b></p><table><thead><tr><th>Product</th><th>SKU</th><th>Category</th>${BRANCHES.map((b) => `<th>${esc(b.town)}</th>`).join('')}<th>Total</th><th>Buy</th><th>Sell</th><th>Profit / Unit</th><th>Status</th></tr></thead><tbody>
       ${rows.map((p) => `<tr><td>${esc(p.name)}</td><td>${esc(p.sku)}</td><td>${esc(p.category)}</td>
       ${BRANCHES.map((b) => `<td>${(p.stock || {})[b.id] || 0}</td>`).join('')}
-      <td><b>${stockTotal(p)}</b></td><td>${money(p.purchasePrice)}</td><td>${money(p.price)}</td><td>${stockBadge(p)}</td></tr>`).join('')}</tbody></table>`;
+      <td><b>${stockTotal(p)}</b></td><td>${money(p.purchasePrice)}</td><td>${money(p.price)}</td><td>${money(Number(p.price || 0) - Number(p.purchasePrice || 0))}</td><td>${stockBadge(p)}</td></tr>`).join('')}</tbody></table>`;
   };
   document.getElementById('isearch').oninput = draw; draw();
 };
@@ -475,8 +486,8 @@ PAGES.reports = async function () {
       <div class="grid2">${tbl('Daily Sales', r.daily)}${tbl('Weekly Sales', r.weekly)}${tbl('Monthly Sales', r.monthly)}${tbl('Product Sales', r.byProduct)}
       ${tbl('Category Sales', r.byCategory)}${tbl('Branch Sales', r.byBranch)}${tbl('Staff Sales', r.byStaff)}${tbl('Customer Purchases', r.byCustomer)}
       ${tbl('Expenses by Category', r.expensesByCategory)}</div>
-      <div class="panel"><h3>Inventory Report</h3><table><thead><tr><th>Product</th><th>SKU</th><th>Category</th><th>Stock</th><th>Value</th><th>Status</th></tr></thead><tbody>
-      ${r.inventory.map((i) => `<tr><td>${esc(i.name)}</td><td>${esc(i.sku)}</td><td>${esc(i.category)}</td><td>${i.stock}</td><td>${money(i.value)}</td><td>${i.status}</td></tr>`).join('')}</tbody></table></div>
+      <div class="panel"><h3>Inventory Report</h3><table><thead><tr><th>Product</th><th>SKU</th><th>Category</th><th>Stock</th><th>Buy Price</th><th>Sell Price</th><th>Profit / Unit</th><th>Stock Cost</th><th>Expected Profit</th><th>Status</th></tr></thead><tbody>
+      ${r.inventory.map((i) => `<tr><td>${esc(i.name)}</td><td>${esc(i.sku)}</td><td>${esc(i.category)}</td><td>${i.stock}</td><td>${money(i.purchasePrice)}</td><td>${money(i.price)}</td><td>${money(i.profit)}</td><td>${money(i.value)}</td><td>${money(i.expectedProfit)}</td><td>${i.status}</td></tr>`).join('')}</tbody></table></div>
       <div class="panel"><h3>Low Stock Report</h3><table><tbody>${r.inventory.filter((i) => i.status !== 'OK').map((i) => `<tr><td>${esc(i.name)}</td><td>${i.stock}</td><td>${i.status}</td></tr>`).join('') || '<tr><td class="muted">All good</td></tr>'}</tbody></table></div>
       <div class="panel"><h3>Lay-By Report</h3><table><thead><tr><th>Customer</th><th>Product</th><th>Agreed</th><th>Paid</th><th>Balance</th><th>Status</th></tr></thead><tbody>
       ${r.laybys.map((l) => `<tr><td>${esc(l.customerName)}</td><td>${esc(l.productName)}</td><td>${money(l.agreedPrice)}</td><td>${money(l.totalPaid)}</td><td>${money(l.balance)}</td><td>${l.status}</td></tr>`).join('') || '<tr><td colspan="6" class="muted">No lay-bys</td></tr>'}</tbody></table></div>`;
